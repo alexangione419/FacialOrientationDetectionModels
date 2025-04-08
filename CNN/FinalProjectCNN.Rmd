@@ -1,0 +1,60 @@
+---
+title: "FinalProjectImageProcessing"
+output: html_document
+date: "2025-04-07"
+---
+
+```{r}
+
+max_pool <- function(X, pool_size) {
+  m <- nrow(X)
+  n <- ncol(X)
+  
+  # calculate dimensions of the pooled output
+  pooled_height <- m - pool_size + 1
+  pooled_width <- n - pool_size + 1
+  pooled_output <- matrix(0, nrow = pooled_height, ncol = pooled_width)
+  
+  #pooling step
+  for (i in 1:pooled_height) {
+    for (j in 1:pooled_width) {
+      pool_region <- G[i:(i + pool_size - 1), j:(j + pool_size - 1)]
+      pooled_output[i, j] <- max(pool_region)
+    }
+  }
+  
+  return(pooled_output)
+}
+
+```
+
+
+```{r setup, include=FALSE}
+
+W <- matrix(c(-1, 0, 1,
+              -1, 0, 1,
+              -1, 0, 1), nrow = 3, byrow = TRUE)
+
+# convolution layer function
+convLayer <- function(X, W, stride=1) {
+  # get the dimensions of the kernel and input
+  k_dim <- nrow(W)
+  x_dim <- nrow(X)
+  
+  # calculate the dimensions of the output matrix
+  q <- (x_dim - k_dim) %/% stride + 1
+  G <- matrix(0, nrow = q, ncol = q)
+  
+  # do the thing
+  for (m in 1:q) {
+    for (n in 1:q) {
+      submatrix <- X[((m-1)*stride+1):((m-1)*stride+k_dim), ((n-1)*stride+1):((n-1)*stride+k_dim)]
+      G[m, n] <- sum(W * submatrix)
+    }
+  }
+  
+  return(G)
+}
+
+```
+
