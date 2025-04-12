@@ -2,9 +2,11 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+import torch.nn as nn
+import torchvision.transforms as transforms
 
 
-def visualize_patches(image, patch_size=16):
+def visualize_patches(image: torch.Tensor, patch_size: int = 16) -> plt.Figure:
     """Visualize how an image is split into patches."""
     # Convert tensor to numpy if needed
     if isinstance(image, torch.Tensor):
@@ -32,7 +34,7 @@ def visualize_patches(image, patch_size=16):
     return fig
 
 
-def visualize_attention(model, image, head_idx=0, layer_idx=0):
+def visualize_attention(model: nn.Module, image: torch.Tensor, head_idx: int = 0, layer_idx: int = 0) -> plt.Figure:
     """Visualize attention weights for a specific head and layer."""
     model.eval()
     with torch.no_grad():
@@ -76,7 +78,7 @@ def visualize_attention(model, image, head_idx=0, layer_idx=0):
     return fig
 
 
-def test_model(model, image_path, transform):
+def test_model(model: nn.Module, image_path: str, transform: transforms.Compose) -> tuple[int, float]:
     """Test the model on a single image."""
     # Load and preprocess image
     image = Image.open(image_path).convert('RGB')
@@ -93,7 +95,7 @@ def test_model(model, image_path, transform):
     return pred, confidence
 
 
-def inspect_positional_embeddings(model):
+def inspect_positional_embeddings(model: nn.Module) -> plt.Figure:
     """Visualize the learned positional embeddings."""
     pos_embed = model.pos_embed.detach().cpu().numpy()[
         0, 1:]  # Exclude CLS token

@@ -12,7 +12,7 @@ from tqdm import tqdm
 class FaceDataset(Dataset):
     """Dataset for face detection."""
 
-    def __init__(self, csv_file, transform=None):
+    def __init__(self, csv_file: str, transform: transforms.Compose = None):
         self.data = pd.read_csv(csv_file)
         self.transform = transform or transforms.Compose([
             transforms.Resize((224, 224)),
@@ -21,10 +21,10 @@ class FaceDataset(Dataset):
                                  0.229, 0.224, 0.225])
         ])
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
         img_path = self.data.iloc[idx]['image_path']
         label = self.data.iloc[idx]['label']
 
@@ -35,7 +35,7 @@ class FaceDataset(Dataset):
         return image, label
 
 
-def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs, device):
+def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, criterion: nn.Module, optimizer: optim.Optimizer, num_epochs: int, device: torch.device):
     """Train the Vision Transformer model."""
     best_val_acc = 0.0
 
