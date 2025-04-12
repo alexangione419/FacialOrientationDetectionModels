@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class DropPath(nn.Module):
-    """Drop paths per sample."""
+    """Drop paths (Stochastic Depth) per sample during training."""
 
     def __init__(self, drop_prob: float = 0.):
         super().__init__()
@@ -15,7 +15,7 @@ class DropPath(nn.Module):
             return x
         keep_prob = 1 - self.drop_prob
 
-        # work with diff dim tensors, not just 2D ConvNets
+        # Create binary mask for dropping paths
         shape = (x.shape[0],) + (1,) * (x.ndim - 1)
         random_tensor = keep_prob + \
             torch.rand(shape, dtype=x.dtype, device=x.device)
@@ -34,21 +34,21 @@ class PatchEmbedding(nn.Module):
         self.patch_size = patch_size
         self.n_patches = (img_size // patch_size) ** 2
 
-        # Linear projection of flattened patches
+        # Linear projection layer implemented ads a convolution
         self.proj = nn.Conv2d(in_channels, embed_dim,
                               kernel_size=patch_size, stride=patch_size)
         self.flatten = nn.Flatten(2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (batch_size, channels, height, width)
-        x = self.proj(x)  # (batch_size, embed_dim, grid_size, grid_size)
-        # (batch_size, n_patches, embed_dim)
+        # x: (batch_size, channels, height, width) -> (batch_size, n_patches, embed_dim)
+        x = self.proj(x)
         x = self.flatten(x).transpose(1, 2)
+
         return x
 
 
 class MultiHeadAttention(nn.Module):
-    """Multi-head self-attention mechanism."""
+    """Multi-head self-attention mechanism for processing patch embeddings."""
 
     def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.1):
         super().__init__()
@@ -57,23 +57,27 @@ class MultiHeadAttention(nn.Module):
         self.head_dim = embed_dim // num_heads
         assert self.head_dim * num_heads == embed_dim, "embed_dim must be divisible by num_heads"
 
+        # Combined projection for Q, K, V
         self.qkv = nn.Linear(embed_dim, embed_dim * 3)
         self.attn_dropout = nn.Dropout(dropout)
         self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through the multi-head attention mechanism."""
         batch_size, num_patches, embed_dim = x.shape
 
+        # Split into heads and separate Q, K, V
         qkv = self.qkv(x).reshape(batch_size, num_patches, 3,
                                   self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        # Scaled dot-product attention
+        # Compute scaled dot-product attention
         attn = (q @ k.transpose(-2, -1)) * (self.head_dim ** -0.5)
         attn = F.softmax(attn, dim=-1)
         attn = self.attn_dropout(attn)
 
+        # Combine attention results and project
         x = (attn @ v).transpose(1, 2).reshape(batch_size, num_patches, embed_dim)
         x = self.proj(x)
         x = self.proj_dropout(x)
@@ -81,7 +85,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class MLP(nn.Module):
-    """Multi-layer perceptron."""
+    """Multi-layer perceptron used in Transformer blocks."""
 
     def __init__(self, in_features: int, hidden_features: int, out_features: int, dropout: float = 0.1):
         super().__init__()
@@ -91,6 +95,7 @@ class MLP(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through the MLP."""
         x = self.fc1(x)
         x = self.act(x)
         x = self.dropout(x)
@@ -118,8 +123,13 @@ class TransformerBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through the Transformer block."""
+        # Apply attention block with residual connection
         x = x + self.drop_path(self.attn(self.norm1(x)))
+
+        # Apply MLP block with residual connection
         x = x + self.drop_path(self.mlp(self.norm2(x)))
+
         return x
 
 
@@ -144,16 +154,16 @@ class VisionTransformer(nn.Module):
             img_size, patch_size, in_channels, embed_dim)
         num_patches = self.patch_embed.n_patches
 
-        # Add CLS token and positional embeddings
+        # Learnable classification token and position embeddings
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(
             torch.zeros(1, num_patches + 1, embed_dim))
         self.pos_drop = nn.Dropout(dropout)
 
-        # Deeper layers have higher drop path rate
+        # Create drop path schedule (increasing rate for deeper layers)
         dpr = [x.item() for x in torch.linspace(0, drop_path, depth)]
 
-        # Transformer encoder blocks with stochastic depth
+        # Stack of Transformer blocks
         self.blocks = nn.ModuleList([
             TransformerBlock(
                 embed_dim=embed_dim,
@@ -164,20 +174,20 @@ class VisionTransformer(nn.Module):
             ) for i in range(depth)
         ])
 
-        # Classification head
+        # Final layer normalization and classification head
         self.norm = nn.LayerNorm(embed_dim)
         self.head = nn.Linear(embed_dim, num_classes)
 
-        # Initialize weights
         self._init_weights()
 
     def _init_weights(self):
-        # Initialize patch embeddings and projection layers
+        """Initialize the weights using a normal distribution."""
         nn.init.normal_(self.pos_embed, std=0.02)
         nn.init.normal_(self.cls_token, std=0.02)
         self.apply(self._init_layer_weights)
 
     def _init_layer_weights(self, m: nn.Module):
+        """Initialize the weights of different layer types."""
         if isinstance(m, nn.Linear):
             nn.init.normal_(m.weight, std=0.02)
             if m.bias is not None:
@@ -187,11 +197,12 @@ class VisionTransformer(nn.Module):
             nn.init.ones_(m.weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Create patches and project them
+        """Forward pass through the Vision Transformer."""
+        # Create patch embeddings
         x = self.patch_embed(x)
         batch_size = x.shape[0]
 
-        # Prepend CLS token and add positional embeddings
+        # Add CLS token and position embeddings
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
@@ -201,9 +212,9 @@ class VisionTransformer(nn.Module):
         for block in self.blocks:
             x = block(x)
 
-        # Classification from CLS token
+        # Extract CLS token and classify
         x = self.norm(x)
-        x = x[:, 0]  # Take only the CLS token
+        x = x[:, 0]
         x = self.head(x)
 
         return x
