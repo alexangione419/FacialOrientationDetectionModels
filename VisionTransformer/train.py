@@ -33,7 +33,7 @@ class NumPyFaceDataset(Dataset):
         return image, label
 
 
-def load_and_prepare_data(test_size: float = 0.2, random_state: int = 42) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def load_and_prepare_data(test_size: float = 0.2, random_state: int = 42, data_size: int = None) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Load and prepare data from NumPy files."""
     # Load positive and negative examples
     try:
@@ -45,6 +45,17 @@ def load_and_prepare_data(test_size: float = 0.2, random_state: int = 42) -> tup
     except FileNotFoundError as e:
         print("Error loading data. Did you run the preprocess.py script?")
         raise e
+
+    # Optionally trim datasets
+    if data_size:
+        positive_examples = positive_examples[:min(
+            len(positive_examples), data_size)]
+        negative_examples = negative_examples[:min(
+            len(negative_examples), data_size)]
+        positive_labels = positive_labels[:min(
+            len(positive_labels), data_size)]
+        negative_labels = negative_labels[:min(
+            len(negative_labels), data_size)]
 
     # Combine data
     X = np.concatenate([positive_examples, negative_examples])
@@ -131,18 +142,15 @@ def main():
     batch_size = 32
     num_epochs = 1
     learning_rate = 1e-4
-    sample_scale = 0.1
+    data_size = 100
 
     # Load and prepare data
-    X_train, X_test, y_train, y_test = load_and_prepare_data()
+    X_train, X_test, y_train, y_test = load_and_prepare_data(
+        data_size=data_size)
 
     # Create datasets
     train_dataset = NumPyFaceDataset(X_train, y_train)
     val_dataset = NumPyFaceDataset(X_test, y_test)
-
-    # # Optionally trim datasets
-    # train_dataset = train_dataset[:int(len(train_dataset) * sample_scale)]
-    # val_dataset = val_dataset[:int(len(val_dataset) * sample_scale)]
 
     # Create dataloaders
     train_loader = DataLoader(
@@ -169,6 +177,9 @@ def main():
     # Train the model
     train_model(model, train_loader, val_loader,
                 criterion, optimizer, num_epochs, device)
+
+    # Save the model
+    torch.save(model.state_dict(), 'vision_transformer.pth')
 
 
 if __name__ == '__main__':

@@ -23,12 +23,12 @@ def image_generator(folder: str, target_size: tuple[int, int] = None) -> list[np
 
 
 # Load images
-target_size = (224, 224)  # Standard size used in many CNN architectures
+target_size = (224, 224)
 positive_images = image_generator(
-    './classifiedData/frontfacingImages', target_size)
+    './ClassifiedData/frontfacingImages', target_size)
 negative_images = image_generator(
-    './classifiedData/facingAwayImages', target_size)
+    './ClassifiedData/facingAwayImages', target_size)
 
 # Save images as numpy arrays
-np.save('./classifiedData/frontfacingImages.npy', positive_images)
-np.save('./classifiedData/facingAwayImages.npy', negative_images)
+np.save('./ClassifiedData/positiveExamples.npy', positive_images)
+np.save('./ClassifiedData/negativeExamples.npy', negative_images)
