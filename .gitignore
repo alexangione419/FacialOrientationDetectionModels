@@ -1,0 +1,4 @@
+myenv
+.ipynb_checkpoints
+*.npy
+*.DS_Store
