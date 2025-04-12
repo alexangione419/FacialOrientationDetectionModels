@@ -7,6 +7,17 @@ from sklearn.model_selection import train_test_split
 import torchvision.transforms as transforms
 from vit_face_detector import VisionTransformer
 from tqdm import tqdm
+import random
+
+
+def set_seed(seed: int = 42):
+    """Set seeds for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 class NumPyFaceDataset(Dataset):
@@ -152,6 +163,9 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
 
 
 def main():
+    # Set random seeds for reproducibility
+    set_seed(42)
+
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
