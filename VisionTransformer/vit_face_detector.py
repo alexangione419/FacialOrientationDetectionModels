@@ -3,6 +3,28 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class DropPath(nn.Module):
+    """Drop paths per sample."""
+
+    def __init__(self, drop_prob: float = 0.):
+        super().__init__()
+        self.drop_prob = drop_prob
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.drop_prob == 0. or not self.training:
+            return x
+        keep_prob = 1 - self.drop_prob
+
+        # work with diff dim tensors, not just 2D ConvNets
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        random_tensor = keep_prob + \
+            torch.rand(shape, dtype=x.dtype, device=x.device)
+        random_tensor.floor_()  # binarize
+        output = x.div(keep_prob) * random_tensor
+
+        return output
+
+
 class PatchEmbedding(nn.Module):
     """Converts input images into patches and projects them into an embedding space."""
 
@@ -78,12 +100,15 @@ class MLP(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    """Transformer encoder block."""
+    """Transformer encoder block with enhanced regularization."""
 
-    def __init__(self, embed_dim: int, num_heads: int, mlp_ratio: float = 4.0, dropout: float = 0.1):
+    def __init__(self, embed_dim: int, num_heads: int, mlp_ratio: float = 4.0,
+                 dropout: float = 0.1, drop_path: float = 0.0):
         super().__init__()
         self.norm1 = nn.LayerNorm(embed_dim)
         self.attn = MultiHeadAttention(embed_dim, num_heads, dropout)
+        self.drop_path = DropPath(
+            drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = nn.LayerNorm(embed_dim)
         self.mlp = MLP(
             in_features=embed_dim,
@@ -93,8 +118,8 @@ class TransformerBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.norm1(x))
-        x = x + self.mlp(self.norm2(x))
+        x = x + self.drop_path(self.attn(self.norm1(x)))
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
 
@@ -111,7 +136,8 @@ class VisionTransformer(nn.Module):
         depth: int = 12,
         num_heads: int = 12,
         mlp_ratio: float = 4.0,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        drop_path: float = 0.1,
     ):
         super().__init__()
         self.patch_embed = PatchEmbedding(
@@ -124,10 +150,18 @@ class VisionTransformer(nn.Module):
             torch.zeros(1, num_patches + 1, embed_dim))
         self.pos_drop = nn.Dropout(dropout)
 
-        # Transformer encoder blocks
+        # Deeper layers have higher drop path rate
+        dpr = [x.item() for x in torch.linspace(0, drop_path, depth)]
+
+        # Transformer encoder blocks with stochastic depth
         self.blocks = nn.ModuleList([
-            TransformerBlock(embed_dim, num_heads, mlp_ratio, dropout)
-            for _ in range(depth)
+            TransformerBlock(
+                embed_dim=embed_dim,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                dropout=dropout,
+                drop_path=dpr[i]
+            ) for i in range(depth)
         ])
 
         # Classification head
