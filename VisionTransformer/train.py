@@ -2,21 +2,20 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-import pandas as pd
-from PIL import Image
+import numpy as np
+from sklearn.model_selection import train_test_split
 import torchvision.transforms as transforms
 from vit_face_detector import VisionTransformer
 from tqdm import tqdm
 
 
-class FaceDataset(Dataset):
-    """Dataset for face detection."""
+class NumPyFaceDataset(Dataset):
+    """Dataset for face detection using NumPy arrays."""
 
-    def __init__(self, csv_file: str, transform: transforms.Compose = None):
-        self.data = pd.read_csv(csv_file)
+    def __init__(self, data: np.ndarray, labels: np.ndarray, transform: transforms.Compose = None):
+        self.data = torch.from_numpy(data).float()
+        self.labels = torch.from_numpy(labels).long()
         self.transform = transform or transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
                                  0.229, 0.224, 0.225])
         ])
@@ -25,14 +24,42 @@ class FaceDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
-        img_path = self.data.iloc[idx]['image_path']
-        label = self.data.iloc[idx]['label']
+        image = self.data[idx]
+        label = self.labels[idx]
 
-        image = Image.open(img_path).convert('RGB')
         if self.transform:
             image = self.transform(image)
 
         return image, label
+
+
+def load_and_prepare_data(test_size: float = 0.2, random_state: int = 42) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Load and prepare data from NumPy files."""
+    # Load positive and negative examples
+    try:
+        positive_examples = np.load('../ClassifiedData/positiveExamples.npy')
+        negative_examples = np.load('../ClassifiedData/negativeExamples.npy')
+
+        positive_labels = np.ones(len(positive_examples))
+        negative_labels = np.zeros(len(negative_examples))
+    except FileNotFoundError as e:
+        print("Error loading data. Did you run the preprocess.py script?")
+        raise e
+
+    # Combine data
+    X = np.concatenate([positive_examples, negative_examples])
+    y = np.concatenate([positive_labels, negative_labels])
+
+    # Split into train and test sets
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state, stratify=y
+    )
+
+    # Ensure data is in the correct format (B, C, H, W)
+    X_train = X_train.transpose(0, 3, 1, 2)
+    X_test = X_test.transpose(0, 3, 1, 2)
+
+    return X_train, X_test, y_train, y_test
 
 
 def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, criterion: nn.Module, optimizer: optim.Optimizer, num_epochs: int, device: torch.device):
@@ -102,15 +129,22 @@ def main():
 
     # Hyperparameters
     batch_size = 32
-    num_epochs = 50
+    num_epochs = 1
     learning_rate = 1e-4
+    sample_scale = 0.1
 
-    # Create datasets and dataloaders
-    # Assuming train/val split is in the CSV
-    train_dataset = FaceDataset('data.csv')
-    # You should implement proper train/val split
-    val_dataset = FaceDataset('data.csv')
+    # Load and prepare data
+    X_train, X_test, y_train, y_test = load_and_prepare_data()
 
+    # Create datasets
+    train_dataset = NumPyFaceDataset(X_train, y_train)
+    val_dataset = NumPyFaceDataset(X_test, y_test)
+
+    # # Optionally trim datasets
+    # train_dataset = train_dataset[:int(len(train_dataset) * sample_scale)]
+    # val_dataset = val_dataset[:int(len(val_dataset) * sample_scale)]
+
+    # Create dataloaders
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     val_loader = DataLoader(
