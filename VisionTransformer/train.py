@@ -54,7 +54,7 @@ def load_and_prepare_data(test_size: float = 0.2, random_state: int = 42, data_s
         positive_labels = np.ones(len(positive_examples))
         negative_labels = np.zeros(len(negative_examples))
     except FileNotFoundError as e:
-        print("Error loading data. Did you run the preprocess.py script?")
+        print("Error loading data. Did you run the preprocessing.py script?")
         raise e
 
     # Optionally trim datasets
