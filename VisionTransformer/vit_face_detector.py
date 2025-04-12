@@ -180,21 +180,37 @@ class VisionTransformer(nn.Module):
 
         self._init_weights()
 
-    def _init_weights(self):
-        """Initialize the weights using a normal distribution."""
-        nn.init.normal_(self.pos_embed, std=0.02)
-        nn.init.normal_(self.cls_token, std=0.02)
-        self.apply(self._init_layer_weights)
-
     def _init_layer_weights(self, m: nn.Module):
         """Initialize the weights of different layer types."""
         if isinstance(m, nn.Linear):
+            # Transformer linear layers: use normal distribution
             nn.init.normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.Conv2d):
+            # Convolutional layers: use Kaiming initialization
+            nn.init.kaiming_normal_(
+                m.weight, mode='fan_out', nonlinearity='relu')
             if m.bias is not None:
                 nn.init.zeros_(m.bias)
         elif isinstance(m, nn.LayerNorm):
             nn.init.zeros_(m.bias)
             nn.init.ones_(m.weight)
+
+    def _init_weights(self):
+        """Initialize the weights using appropriate initialization strategies."""
+        # Initialize positional embedding and classification token
+        nn.init.normal_(self.pos_embed, std=0.02)
+        nn.init.normal_(self.cls_token, std=0.02)
+
+        # Initialize patch embedding separately
+        nn.init.kaiming_normal_(
+            self.patch_embed.proj.weight, mode='fan_out', nonlinearity='relu')
+        if self.patch_embed.proj.bias is not None:
+            nn.init.zeros_(self.patch_embed.proj.bias)
+
+        # Initialize rest of the layers
+        self.apply(self._init_layer_weights)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the Vision Transformer."""
