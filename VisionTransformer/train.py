@@ -80,12 +80,14 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
     for epoch in range(num_epochs):
         # Training phase
         model.train()
-        train_loss = 0.0
+        running_loss = 0.0
         train_correct = 0
         train_total = 0
+        batch_count = 0
 
         pbar = tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs}')
         for images, labels in pbar:
+            batch_size = labels.size(0)
             images, labels = images.to(device), labels.to(device)
 
             optimizer.zero_grad()
@@ -95,35 +97,51 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
             loss.backward()
             optimizer.step()
 
-            train_loss += loss.item()
+            # Calculate batch average loss
+            batch_loss = loss.item()
+            running_loss += batch_loss * batch_size  # Weight by batch size
+            batch_count += 1
+
             _, predicted = outputs.max(1)
-            train_total += labels.size(0)
+            train_total += batch_size
             train_correct += predicted.eq(labels).sum().item()
 
+            # Show current batch average loss and running average loss
+            current_avg_loss = running_loss / train_total
             pbar.set_postfix({
-                'loss': train_loss/train_total,
+                'batch_loss': batch_loss,
+                'avg_loss': current_avg_loss,
                 'acc': 100.*train_correct/train_total
             })
 
         # Validation phase
         model.eval()
-        val_loss = 0.0
+        running_val_loss = 0.0
         val_correct = 0
         val_total = 0
 
         with torch.no_grad():
             for images, labels in val_loader:
+                batch_size = labels.size(0)
                 images, labels = images.to(device), labels.to(device)
                 outputs = model(images)
                 loss = criterion(outputs, labels)
 
-                val_loss += loss.item()
+                # Weight validation loss by batch size
+                running_val_loss += loss.item() * batch_size
                 _, predicted = outputs.max(1)
-                val_total += labels.size(0)
+                val_total += batch_size
                 val_correct += predicted.eq(labels).sum().item()
 
+        # Calculate final average losses
+        avg_train_loss = running_loss / train_total
+        avg_val_loss = running_val_loss / val_total
         val_acc = 100. * val_correct / val_total
-        print(f'\nValidation Accuracy: {val_acc:.2f}%')
+
+        print(f'\nEpoch {epoch+1} Summary:')
+        print(f'Average Training Loss: {avg_train_loss:.4f}')
+        print(f'Average Validation Loss: {avg_val_loss:.4f}')
+        print(f'Validation Accuracy: {val_acc:.2f}%')
 
         # Save best model
         if val_acc > best_val_acc:
@@ -142,7 +160,7 @@ def main():
     batch_size = 32
     num_epochs = 1
     learning_rate = 1e-4
-    data_size = 100
+    data_size = 10
 
     # Load and prepare data
     X_train, X_test, y_train, y_test = load_and_prepare_data(
@@ -177,9 +195,6 @@ def main():
     # Train the model
     train_model(model, train_loader, val_loader,
                 criterion, optimizer, num_epochs, device)
-
-    # Save the model
-    torch.save(model.state_dict(), 'vision_transformer.pth')
 
 
 if __name__ == '__main__':
