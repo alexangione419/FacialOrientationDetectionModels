@@ -8,6 +8,8 @@ import torchvision.transforms as transforms
 from vit_face_detector import VisionTransformer
 from tqdm import tqdm
 import random
+import matplotlib.pyplot as plt
+from typing import Dict, List
 
 
 def set_seed(seed: int = 42):
@@ -84,9 +86,41 @@ def load_and_prepare_data(test_size: float = 0.2, random_state: int = 42, data_s
     return X_train, X_test, y_train, y_test
 
 
-def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, criterion: nn.Module, optimizer: optim.Optimizer, num_epochs: int, device: torch.device):
+def plot_training_metrics(metrics: Dict[str, List[float]]):
+    """Plot training and validation metrics over epochs."""
+    print(metrics)
+    plt.figure(figsize=(12, 8))
+
+    # Plot losses
+    plt.subplot(2, 1, 1)
+    plt.plot(metrics['train_loss'], label='Training Loss')
+    plt.plot(metrics['val_loss'], label='Validation Loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
+
+    # Plot accuracies
+    plt.subplot(2, 1, 2)
+    plt.plot(metrics['train_acc'], label='Training Accuracy')
+    plt.plot(metrics['val_acc'], label='Validation Accuracy')
+    plt.title('Training and Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy (%)')
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.savefig('training_metrics.png')
+    plt.close()
+
+
+def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, criterion: nn.Module, optimizer: optim.Optimizer, num_epochs: int, device: torch.device, save_model: bool):
     """Train the Vision Transformer model."""
     best_val_acc = 0.0
+    metrics = {'train_loss': [], 'val_loss': [],
+               'train_acc': [], 'val_acc': []}
 
     for epoch in range(num_epochs):
         # Training phase
@@ -155,11 +189,22 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
         print(f'Validation Accuracy: {val_acc:.2f}%')
 
         # Save best model
-        if val_acc > best_val_acc:
+        if save_model and val_acc > best_val_acc:
             best_val_acc = val_acc
             torch.save(model.state_dict(), 'best_model.pth')
             print(
                 f'New best model saved with validation accuracy: {val_acc:.2f}%')
+
+        # Update metrics
+        metrics['train_loss'].append(avg_train_loss)
+        metrics['val_loss'].append(avg_val_loss)
+        metrics['train_acc'].append(100.*train_correct/train_total)
+        metrics['val_acc'].append(val_acc)
+
+    # Plot training metrics
+    plot_training_metrics(metrics)
+
+    return metrics
 
 
 def main():
@@ -172,9 +217,10 @@ def main():
 
     # Hyperparameters
     batch_size = 32
-    num_epochs = 1
+    num_epochs = 3
     learning_rate = 1e-4
     data_size = 10
+    save_model = False
 
     # Load and prepare data
     X_train, X_test, y_train, y_test = load_and_prepare_data(
@@ -208,7 +254,7 @@ def main():
 
     # Train the model
     train_model(model, train_loader, val_loader,
-                criterion, optimizer, num_epochs, device)
+                criterion, optimizer, num_epochs, device, save_model)
 
 
 if __name__ == '__main__':
