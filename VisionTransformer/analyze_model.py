@@ -7,23 +7,19 @@ from utils import (
     visualize_patches,
     visualize_attention,
     inspect_positional_embeddings,
-    test_model
 )
 
 
-output_path = "../results/vit_v5"
-
-
-def analyze_vision_transformer():
+def analyze_vision_transformer(input_path: str, output_path: str):
     # Load the model
     model = VisionTransformer(
         img_size=224,
         patch_size=16,
         in_channels=3,
         num_classes=2,
-        embed_dim=512,
-        depth=6,
-        num_heads=8,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
         dropout=0.1,
         drop_path=0.1
     )
@@ -42,8 +38,7 @@ def analyze_vision_transformer():
     ])
 
     # 1. Analyze Patch Embeddings
-    sample_image = Image.open(
-        '../ClassifiedData/facingAwayImages/image00004.jpg').convert('RGB')
+    sample_image = Image.open(input_path).convert('RGB')
     transformed_image = transform(sample_image)
     patch_vis = visualize_patches(transformed_image, patch_size=16)
     plt.savefig(f'{output_path}/plots/patch_visualization.png')
@@ -67,33 +62,31 @@ def analyze_vision_transformer():
     plt.savefig(f'{output_path}/plots/positional_embeddings.png')
     plt.close()
 
-    # 4. Test on sample images
-    test_images = [
-        '../ClassifiedData/facingAwayImages/image00004.jpg',
-        '../ClassifiedData/facingAwayImages/image00006.jpg',
-        '../ClassifiedData/facingAwayImages/image00010.jpg',
-        '../ClassifiedData/facingAwayImages/image00022.jpg',
-        '../ClassifiedData/frontFacingImages/image00002.jpg',
-        '../ClassifiedData/frontFacingImages/image00008.jpg',
-        '../ClassifiedData/frontFacingImages/image00013.jpg',
-        '../ClassifiedData/frontFacingImages/image00026.jpg',
-    ]
+    # # 4. Test on sample images
+    # test_images = [
+    #     '../ClassifiedData/facingAwayImages/image00004.jpg',
+    #     '../ClassifiedData/facingAwayImages/image00006.jpg',
+    #     '../ClassifiedData/facingAwayImages/image00010.jpg',
+    #     '../ClassifiedData/facingAwayImages/image00022.jpg',
+    #     '../ClassifiedData/frontFacingImages/image00002.jpg',
+    #     '../ClassifiedData/frontFacingImages/image00008.jpg',
+    #     '../ClassifiedData/frontFacingImages/image00013.jpg',
+    #     '../ClassifiedData/frontFacingImages/image00026.jpg',
+    # ]
 
     results = []
-    for img_path in test_images:
-        pred, conf = test_model(model, img_path, transform)
-        results.append({
-            'image': img_path,
-            'prediction': 'Face' if pred == 1 else 'Non-face',
-            'confidence': conf
-        })
+    # for img_path in test_images:
+    #     pred, conf = test_model(model, img_path, transform)
+    #     results.append({
+    #         'image': img_path,
+    #         'prediction': 'Face' if pred == 1 else 'Non-face',
+    #         'confidence': conf
+    #     })
 
     return results
 
 
 if __name__ == "__main__":
-    results = analyze_vision_transformer()
-    for result in results:
-        print(f"Image: {result['image']}")
-        print(f"Prediction: {result['prediction']}")
-        print(f"Confidence: {result['confidence']:.4f}\n")
+    input_path = '../ClassifiedData/frontFacingImages/image00014.jpg'
+    output_path = "../results/vit_v1"
+    results = analyze_vision_transformer(input_path, output_path)
