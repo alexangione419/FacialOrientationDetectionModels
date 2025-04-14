@@ -7,6 +7,7 @@ from utils import (
     visualize_patches,
     visualize_attention,
     inspect_positional_embeddings,
+    compute_attention_rollout,
 )
 
 
@@ -17,9 +18,9 @@ def analyze_vision_transformer(input_path: str, output_path: str):
         patch_size=16,
         in_channels=3,
         num_classes=2,
-        embed_dim=768,
-        depth=12,
-        num_heads=12,
+        embed_dim=512,
+        depth=6,
+        num_heads=8,
         dropout=0.1,
         drop_path=0.1
     )
@@ -57,7 +58,12 @@ def analyze_vision_transformer(input_path: str, output_path: str):
                 f'{output_path}/plots/attention_l{layer_idx}_h{head_idx}.png')
             plt.close()
 
-    # 3. Analyze Positional Embeddings
+    # 3. Analyze Attention Rollout
+    rollout_vis = compute_attention_rollout(model, transformed_image)
+    plt.savefig(f'{output_path}/plots/attention_rollout.png')
+    plt.close()
+
+    # 4. Analyze Positional Embeddings
     pos_embed_vis = inspect_positional_embeddings(model)
     plt.savefig(f'{output_path}/plots/positional_embeddings.png')
     plt.close()
@@ -88,5 +94,5 @@ def analyze_vision_transformer(input_path: str, output_path: str):
 
 if __name__ == "__main__":
     input_path = '../ClassifiedData/frontFacingImages/image00014.jpg'
-    output_path = "../results/vit_v1"
+    output_path = "../results/vit_v4"
     results = analyze_vision_transformer(input_path, output_path)

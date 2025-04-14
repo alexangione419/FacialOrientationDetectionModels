@@ -110,3 +110,79 @@ def inspect_positional_embeddings(model: nn.Module) -> plt.Figure:
     plt.colorbar(im)
 
     return fig
+
+
+def compute_attention_rollout(model: nn.Module, image: torch.Tensor) -> plt.Figure:
+    """
+    Compute and visualize attention rollout across all layers.
+    This shows the cumulative effect of attention through the network.
+    """
+    model.eval()
+    with torch.no_grad():
+        B = 1
+        x = image.unsqueeze(0)
+
+        # Forward pass through patch embedding
+        x = model.patch_embed(x)
+
+        # Add CLS token and position embeddings
+        cls_tokens = model.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = x + model.pos_embed
+
+        # Storage for attention weights from all layers
+        attention_weights = []
+
+        # Collect attention weights from all layers
+        for block in model.blocks:
+            # Get normalized input for attention
+            norm_x = block.norm1(x)
+
+            # Get QKV projections
+            qkv = block.attn.qkv(norm_x)
+            qkv = qkv.reshape(B, -1, 3, block.attn.num_heads,
+                              block.attn.head_dim)
+            qkv = qkv.permute(2, 0, 3, 1, 4)
+            q, k, v = qkv[0], qkv[1], qkv[2]
+
+            # Compute attention weights
+            attn = (q @ k.transpose(-2, -1)) * (block.attn.head_dim ** -0.5)
+            attn = attn.softmax(dim=-1)
+
+            # Average attention across heads
+            attn_averaged = attn.mean(dim=1)
+            attention_weights.append(attn_averaged)
+
+            # Update x using the block's forward pass
+            x = block(x)
+
+        # Compute rollout through multiplication of attention weights
+        rollout = torch.eye(
+            attention_weights[0].shape[-1]).unsqueeze(0).to(image.device)
+        for attn in attention_weights:
+            rollout = torch.bmm(attn, rollout)
+
+        # Get attention from CLS token to patches (first row)
+        rollout = rollout[0, 0, 1:]  # Remove CLS token and get first row
+
+        # Reshape to square for visualization
+        size = int(np.sqrt(len(rollout)))
+        attention_map = rollout.reshape(size, size).cpu().numpy()
+
+        # Create visualization
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
+
+        # Plot original image
+        img_np = image.permute(1, 2, 0).cpu().numpy()
+        img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
+        ax1.imshow(img_np)
+        ax1.set_title('Original Image')
+        ax1.axis('off')
+
+        # Plot attention rollout
+        im = ax2.imshow(attention_map, cmap='viridis')
+        ax2.set_title('Attention Rollout')
+        plt.colorbar(im, ax=ax2)
+
+        plt.tight_layout()
+        return fig
