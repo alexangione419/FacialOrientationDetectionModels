@@ -1,0 +1,6 @@
+myenv
+.*
+*.npy
+*.pth
+__pycache__
+data/
