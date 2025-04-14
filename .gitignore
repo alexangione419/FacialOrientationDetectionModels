@@ -1,6 +1,8 @@
 myenv
-.*
+/.*
 *.npy
 *.pth
 __pycache__
 data/
+results/
+**/.DS_Store

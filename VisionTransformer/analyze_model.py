@@ -11,7 +11,7 @@ from utils import (
 )
 
 
-output_path = "../results/vit_v2"
+output_path = "../results/vit_v5"
 
 
 def analyze_vision_transformer():

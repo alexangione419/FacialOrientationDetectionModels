@@ -22,13 +22,18 @@ def image_generator(folder: str, target_size: tuple[int, int] = None) -> list[np
     return images
 
 
-# Load images
-target_size = (224, 224)
-positive_images = image_generator(
-    './ClassifiedData/frontfacingImages', target_size)
-negative_images = image_generator(
-    './ClassifiedData/facingAwayImages', target_size)
+# Generate positive and negative images if they don't exist
+posExamplesPath = './ClassifiedData/positiveExamples.npy'
+negExamplesPath = './ClassifiedData/negativeExamples.npy'
 
-# Save images as numpy arrays
-np.save('./ClassifiedData/positiveExamples.npy', positive_images)
-np.save('./ClassifiedData/negativeExamples.npy', negative_images)
+if not os.path.exists(posExamplesPath) or not os.path.exists(negExamplesPath):
+    # Load images
+    target_size = (224, 224)
+    positive_images = image_generator(
+        './ClassifiedData/frontfacingImages', target_size)
+    negative_images = image_generator(
+        './ClassifiedData/facingAwayImages', target_size)
+
+    # Save images as numpy arrays
+    np.save(posExamplesPath, positive_images)
+    np.save(negExamplesPath, negative_images)
