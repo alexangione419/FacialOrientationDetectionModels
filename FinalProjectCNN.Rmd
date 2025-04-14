@@ -15,17 +15,15 @@ library(tensorflow)
 #library(keras)
 
 
-#install.packages("reticulate")
 #install.packages("remotes")
-library("reticulate")
 #remotes::install_github("rstudio/tensorflow")
 #install_tensorflow(version = "2.0.0b1", method = "conda", envname = "r-reticulate")
 
 #remotes::install_github("rstudio/keras", dependencies = TRUE)
-library(keras3)
+library(keras)
 
 
-#install.packages("reticulate")
+#install.packages("keras3")
 #library(reticulate)
 # install_keras(method = "conda", envname = "r-keras")
 #install_tensorflow(method= "conda", envname= "t-flow")
@@ -69,8 +67,7 @@ cnn_model <- keras_model_sequential()
 
 
 cnn_model %>%
-    
- # #layer 1
+  #layer 1
   layer_conv_2d(filters = 32, kernel_size = c(5,5), activation = 'relu', input_shape = c(150, 150, 3)) %>% 
   layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
   
@@ -92,9 +89,9 @@ cnn_model %>%
 
 
 cnn_model %>% compile(
-  loss = "binary_crossentropy",
-  optimizer = optimizer_sgd(),
-  metrics = c("accuracy")
+  optimizer = optimizer_adadelta(),
+  loss = loss_binary_crossentropy,
+  metrics = 'accuracy'
 )
 
 #cnn_model %>% compile(
@@ -110,10 +107,24 @@ summary(cnn_model)
 
 
 ``` {r}
+test_ds <- image_dataset_from_directory(
+  directory = "./classifiedTestingData",  
+  labels = "inferred",
+  label_mode = "binary",          
+  image_size = c(150, 150),
+  shuffle = FALSE
+)
+
+
+```
+
+
+``` {r}
 
 cnn_history <- cnn_model %>% fit(
   train_ds,
-  epochs = as.integer(10)
+  epochs = as.integer(10),
+  validation_data = test_ds
 )
 
 print(cnn_history)
@@ -123,19 +134,6 @@ print(cnn_history)
 
 
 
-``` {r}
-test_ds <- image_dataset_from_directory(
-  directory = "./classifiedTestingData",  
-  labels = "inferred",
-  label_mode = "binary",          
-  image_size = c(150, 150),
-  shuffle = FALSE
-)
-
-evaluation <- cnn_model %>% evaluate(test_ds)
-print(evaluation)
-
-```
 
 
 
