@@ -42,7 +42,7 @@ library(keras)
 # data preparation
 
 train_dir <- "./classifiedTrainingData"  
-batch_size = 32
+batch_size = 64
 
 # Create a dataset 
 train_ds <- image_dataset_from_directory(
@@ -79,9 +79,14 @@ cnn_model %>%
   
   layer_flatten() %>% 
   #layer 3
-  layer_dense(units = 128, activation = 'relu') %>% 
+  layer_dense(units = 256, activation = 'relu') %>% 
   #dropout for over fitting avoidance 
   layer_dropout(rate = 0.5) %>% 
+  
+  #layer 4 ??
+  layer_dense(units = 128, activation = 'relu') %>% 
+  layer_dropout(rate = 0.5) %>% 
+
   # output layer
   layer_dense(units = 1, activation = 'sigmoid')
 
@@ -89,7 +94,7 @@ cnn_model %>%
 
 
 cnn_model %>% compile(
-  optimizer = optimizer_adadelta(),
+  optimizer = optimizer_adam(),
   loss = loss_binary_crossentropy,
   metrics = 'accuracy'
 )
@@ -123,7 +128,7 @@ test_ds <- image_dataset_from_directory(
 
 cnn_history <- cnn_model %>% fit(
   train_ds,
-  epochs = as.integer(10),
+  epochs = as.integer(30),
   validation_data = test_ds
 )
 
@@ -134,8 +139,46 @@ print(cnn_history)
 
 
 
+```{r}
+library(ggplot2)
+
+epochs <- 1:length(cnn_history$metrics$accuracy)
+
+# Plot training accuracy (blue line)
+plot(epochs, cnn_history$metrics$accuracy, type = "l", col = "blue",
+     xlab = "Epoch", ylab = "Accuracy", lwd = 2,
+     main = "Training vs Validation Accuracy")
+
+# Add testing (validation) accuracy (red line)
+lines(epochs, cnn_history$metrics$val_accuracy, type = "l", col = "orange", lwd = 2)
+
+
+```
+
+
+```{r}
+# produce kernel visual
+img_path <- "./data/lfw-deepfunneled/lfw-deepfunneled/Albrecht_Mentz_0002.jpg"  
+
+image <- image_to_array(image_load(img_path, target_size = c(150, 150)))
+
+
+image <- array_reshape(image, c(1, dim(image)))
+
+activation_model <- keras_model(inputs = cnn_model$input,
+                                outputs = cnn_model$layers[[1]]$output)
+
+activation <- predict(activation_model, image)
+activation_fix <- activation[1,,,]
+filter_index <- 1
+activation_map <- activation_fix[,, filter_index]
+
+image(activation_map, 
+      col = gray.colors(256), 
+      axes = FALSE, 
+      main = paste("Activation Map for Filter", filter_index))
 
 
 
-
+```
 
