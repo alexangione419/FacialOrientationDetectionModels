@@ -26,3 +26,8 @@ The Vision Transformer consists of:
    - Layer normalization
    - MLP blocks
 5. Classification head
+ds
+## Data Visualization
+
+1. Open `web_interface/index.html` in your browser.
+2. Enjoy!

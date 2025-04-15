@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facial Orientation Detection Models</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-gray-100">
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <h1 class="text-2xl font-bold text-gray-800">Facial Orientation Detection Models</h1>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Model Selection -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-4">Select Model</h2>
+            <div class="flex space-x-4">
+                <button id="cnn-btn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition">CNN
+                    Model</button>
+                <button id="vit-btn"
+                    class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition">Vision
+                    Transformer</button>
+            </div>
+        </div>
+
+        <!-- Model Architecture Visualization -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">Model Architecture</h3>
+                <div id="architecture-viz" class="h-64 bg-gray-100 rounded flex items-center justify-center">
+                    <img id="cnn-architecture-viz" src="cnnArcitecture.png" alt="CNN Architecture"
+                        class="w-full h-full object-contain">
+
+                    <img id="vit-architecture-viz" src="vitArchitecture.png" alt="Vision Transformer Architecture"
+                        class="w-full h-full object-contain">
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">Model Performance</h3>
+                <canvas id="performance-chart" class="w-full h-64"></canvas>
+            </div>
+        </div>
+
+        <!-- Model Details -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- CNN Model Details -->
+            <div id="cnn-details" class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">CNN Model</h3>
+                <div class="space-y-4">
+                    <p><strong>Architecture:</strong></p>
+                    <ul class="list-disc pl-5">
+                        <li>Conv2D (32 filters, 5x5 kernel)</li>
+                        <li>MaxPooling2D (2x2)</li>
+                        <li>Conv2D (64 filters, 3x3 kernel)</li>
+                        <li>MaxPooling2D (2x2)</li>
+                        <li>Dense (256 units)</li>
+                        <li>Dropout (0.5)</li>
+                        <li>Dense (128 units)</li>
+                        <li>Output (Sigmoid)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Vision Transformer Details -->
+            <div id="vit-details" class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-lg font-semibold mb-4">Vision Transformer</h3>
+                <div class="space-y-4">
+                    <p><strong>Architecture:</strong></p>
+                    <ul class="list-disc pl-5">
+                        <li>Patch Embedding (16x16 patches)</li>
+                        <li>CLS Token</li>
+                        <li>Positional Embeddings</li>
+                        <li>Transformer Encoder Blocks</li>
+                        <li>Multi-head Self-attention</li>
+                        <li>Layer Normalization</li>
+                        <li>MLP Blocks</li>
+                        <li>Classification Head</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Initialize performance chart
+        const ctx = document.getElementById('performance-chart').getContext('2d');
+        const performanceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array.from({ length: 100 }, (_, i) => i + 1),
+                datasets: [{
+                    label: 'Training Accuracy',
+                    data: [], // Placeholder for training accuracy
+                    borderColor: 'rgb(59, 130, 246)',
+                    tension: 0.1
+                }, {
+                    label: 'Validation Accuracy',
+                    data: [], // Placeholder for validation accuracy
+                    borderColor: 'rgb(249, 115, 22)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        max: 100
+                    }
+                }
+            }
+        });
+
+        // Add interactivity
+        document.getElementById('cnn-btn').addEventListener('click', () => {
+            document.getElementById('cnn-details').classList.remove('hidden');
+            document.getElementById('vit-details').classList.add('hidden');
+            document.getElementById('cnn-architecture-viz').classList.remove('hidden');
+            document.getElementById('vit-architecture-viz').classList.add('hidden');
+            updatePerformanceChart('cnn');
+        });
+
+        document.getElementById('vit-btn').addEventListener('click', () => {
+            document.getElementById('vit-details').classList.remove('hidden');
+            document.getElementById('cnn-details').classList.add('hidden');
+            document.getElementById('cnn-architecture-viz').classList.add('hidden');
+            document.getElementById('vit-architecture-viz').classList.remove('hidden');
+            updatePerformanceChart('vit');
+        });
+
+        function updatePerformanceChart(model) {
+            const data = model === 'cnn' ?
+                {
+                    training: [71.05190999999999, 84.96874, 90.45936, 95.02582000000001, 96.24897999999999, 97.44496000000001, 98.09731000000001, 97.93422000000001, 98.55939000000001, 98.88557, 99.45638, 99.40200999999999, 99.61946, 99.78255, 99.53791, 99.48356000000001, 99.5651, 99.10302, 97.93422000000001, 99.15737999999999, 99.59228, 99.23893, 99.15737999999999, 99.23893, 99.5651],
+                    validation: [69.12631, 80.43477999999999, 84.78261, 84.78261, 89.13044, 84.78261, 86.95652, 89.13044, 91.30435, 89.13044, 91.30435, 86.95652, 89.13044, 89.13044, 86.95652, 88.78260999999999, 86.95652, 82.60869, 83.60869, 84.78261, 90.23225000000001, 79.2317, 86.95652, 91.32652, 91.32652]
+                } :
+                {
+                    training: [72.1, 73.9, 76.3, 75.3, 76.5, 78.0, 78.8, 78.9, 79.2, 80.4, 81.1, 81.8, 82.2, 81.1, 80.2, 82.6, 84.4, 85.0, 85.8, 85.8, 87.4, 87.9, 88.9, 89.1, 89.8, 89.9, 89.3, 92.2, 92.6, 92.8, 93.5, 93.6, 92.6, 93.6, 93.7, 93.2, 93.5, 95.7, 95.6, 95.1, 95.3, 95.2, 96.7, 94.4, 96.9, 96.0, 94.0, 95.4, 96.7, 96.9, 96.6, 97.2, 96.7, 96.6, 96.9, 96.6, 97.2, 96.7, 97.5, 96.9, 97.2, 97.3, 97.7, 97.5, 97.3, 97.9, 96.6, 98.0, 97.9, 97.5, 98.1, 98.0, 97.6, 96.9, 97.8, 97.4, 97.7, 97.3, 98.7, 98.1, 97.8, 97.6, 97.2, 97.9, 98.0, 98.2, 97.6, 98.3, 97.6, 97.7, 98.6, 98.1, 97.3, 98.6, 98.4, 97.8, 98.8, 98.4, 98.3],
+                    validation: [71.74, 73.78, 73.91, 75.14, 75.68, 74.86, 77.04, 76.77, 74.46, 73.37, 76.36, 74.59, 77.31, 76.09, 75.27, 76.36, 75.82, 77.45, 76.09, 78.4, 75.68, 77.04, 73.91, 73.51, 74.46, 77.17, 78.4, 75.41, 76.63, 77.58, 74.32, 77.45, 76.77, 77.72, 75.95, 75.95, 73.91, 76.77, 75.68, 75.82, 75.54, 75.82, 75.95, 75.14, 76.9, 76.77, 76.77, 77.04, 78.4, 76.77, 75.82, 77.72, 76.09, 75.27, 75.95, 75.82, 75.82, 78.8, 77.99, 75.0, 76.09, 77.58, 76.77, 77.45, 77.04, 75.82, 74.73, 77.17, 76.77, 78.8, 77.04, 77.45, 77.45, 78.67, 78.94, 77.58, 76.36, 75.68, 77.17, 76.09, 76.49, 74.73, 76.77, 76.49, 76.09, 76.22, 76.36, 77.58, 76.09, 75.82, 77.17, 77.72, 78.12, 76.36, 77.17, 78.94, 77.17, 75.14, 75.68, 74.18]
+                };
+
+            performanceChart.data.datasets[0].data = data.training;
+            performanceChart.data.datasets[1].data = data.validation;
+            performanceChart.data.labels = Array.from({ length: Math.min(data.training.length, data.validation.length) }, (_, i) => i + 1);
+            performanceChart.update();
+        }
+
+        // Initialize with CNN data
+        updatePerformanceChart('cnn');
+        document.getElementById('vit-details').classList.add('hidden');
+        document.getElementById('vit-architecture-viz').classList.add('hidden');
+    </script>
+</body>
+
+</html>
