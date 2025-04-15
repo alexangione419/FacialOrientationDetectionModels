@@ -8,7 +8,10 @@ from utils import (
     visualize_attention,
     inspect_positional_embeddings,
     compute_attention_rollout,
+    compute_average_attention_rollout,
 )
+import glob
+import os
 
 
 def analyze_vision_transformer(input_path: str, output_path: str):
@@ -18,9 +21,9 @@ def analyze_vision_transformer(input_path: str, output_path: str):
         patch_size=16,
         in_channels=3,
         num_classes=2,
-        embed_dim=512,
-        depth=6,
-        num_heads=8,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
         dropout=0.1,
         drop_path=0.1
     )
@@ -58,12 +61,37 @@ def analyze_vision_transformer(input_path: str, output_path: str):
                 f'{output_path}/plots/attention_l{layer_idx}_h{head_idx}.png')
             plt.close()
 
-    # 3. Analyze Attention Rollout
+    # 3. Analyze Attention Rollout for single image
     rollout_vis = compute_attention_rollout(model, transformed_image)
-    plt.savefig(f'{output_path}/plots/attention_rollout.png')
+    plt.savefig(f'{output_path}/plots/attention_rollout_single.png')
     plt.close()
 
-    # 4. Analyze Positional Embeddings
+    # 4. Analyze Average Attention Rollout across multiple images
+    # Get paths for both front-facing and facing-away images
+    front_facing_dir = '../ClassifiedData/frontFacingImages'
+    facing_away_dir = '../ClassifiedData/facingAwayImages'
+
+    image_count = 100
+    front_facing_images = glob.glob(os.path.join(
+        front_facing_dir, '*.jpg'))[:image_count]  # Limit to 20 images
+    facing_away_images = glob.glob(os.path.join(
+        facing_away_dir, '*.jpg'))[:image_count]   # Limit to 20 images
+
+    # Analyze front-facing images
+    if front_facing_images:
+        avg_rollout_front = compute_average_attention_rollout(
+            model, front_facing_images, transform)
+        plt.savefig(f'{output_path}/plots/average_attention_rollout_front.png')
+        plt.close()
+
+    # Analyze facing-away images
+    if facing_away_images:
+        avg_rollout_away = compute_average_attention_rollout(
+            model, facing_away_images, transform)
+        plt.savefig(f'{output_path}/plots/average_attention_rollout_away.png')
+        plt.close()
+
+    # 5. Analyze Positional Embeddings
     pos_embed_vis = inspect_positional_embeddings(model)
     plt.savefig(f'{output_path}/plots/positional_embeddings.png')
     plt.close()
@@ -94,5 +122,5 @@ def analyze_vision_transformer(input_path: str, output_path: str):
 
 if __name__ == "__main__":
     input_path = '../ClassifiedData/frontFacingImages/image00014.jpg'
-    output_path = "../results/vit_v4"
+    output_path = "../results/vit_v5"
     results = analyze_vision_transformer(input_path, output_path)

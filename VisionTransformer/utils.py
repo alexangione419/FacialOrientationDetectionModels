@@ -186,3 +186,135 @@ def compute_attention_rollout(model: nn.Module, image: torch.Tensor) -> plt.Figu
 
         plt.tight_layout()
         return fig
+
+
+def compute_average_attention_rollout(model: nn.Module, image_paths: list[str], transform: transforms.Compose, batch_size: int = 4) -> plt.Figure:
+    """
+    Compute and visualize average attention rollout across multiple images.
+    This shows where the model generally focuses its attention across the dataset.
+
+    Args:
+        model: The Vision Transformer model
+        image_paths: List of paths to images to analyze
+        transform: Transformation pipeline to apply to images
+        batch_size: Number of images to process at once
+    """
+    model.eval()
+    accumulated_rollout = None
+    num_images = len(image_paths)
+
+    with torch.no_grad():
+        # Process images in batches
+        for i in range(0, num_images, batch_size):
+            batch_paths = image_paths[i:i + batch_size]
+            batch_size_actual = len(batch_paths)
+
+            # Load and preprocess batch of images
+            batch_images = []
+            for img_path in batch_paths:
+                img = Image.open(img_path).convert('RGB')
+                img_tensor = transform(img)
+                batch_images.append(img_tensor)
+
+            # Stack images into a batch
+            x = torch.stack(batch_images)
+
+            # Forward pass through patch embedding
+            x = model.patch_embed(x)
+
+            # Add CLS token and position embeddings
+            cls_tokens = model.cls_token.expand(batch_size_actual, -1, -1)
+            x = torch.cat((cls_tokens, x), dim=1)
+            x = x + model.pos_embed[:batch_size_actual]
+
+            # Storage for attention weights from all layers
+            attention_weights = []
+
+            # Collect attention weights from all layers
+            for block in model.blocks:
+                # Get normalized input for attention
+                norm_x = block.norm1(x)
+
+                # Get QKV projections
+                qkv = block.attn.qkv(norm_x)
+                qkv = qkv.reshape(batch_size_actual, -1, 3,
+                                  block.attn.num_heads, block.attn.head_dim)
+                qkv = qkv.permute(2, 0, 3, 1, 4)
+                q, k, v = qkv[0], qkv[1], qkv[2]
+
+                # Compute attention weights
+                attn = (q @ k.transpose(-2, -1)) * \
+                    (block.attn.head_dim ** -0.5)
+                attn = attn.softmax(dim=-1)
+
+                # Average attention across heads
+                attn_averaged = attn.mean(dim=1)
+                attention_weights.append(attn_averaged)
+
+                # Update x using the block's forward pass
+                x = block(x)
+
+            # Compute rollout for this batch
+            batch_rollout = torch.eye(
+                attention_weights[0].shape[-1]).unsqueeze(0).repeat(batch_size_actual, 1, 1).to(x.device)
+            for attn in attention_weights:
+                batch_rollout = torch.bmm(attn, batch_rollout)
+
+            # Get attention from CLS token to patches (first row) for each image
+            # Remove CLS token and get first row
+            batch_rollout = batch_rollout[:, 0, 1:]
+
+            # Accumulate rollout
+            if accumulated_rollout is None:
+                accumulated_rollout = batch_rollout.sum(dim=0)
+            else:
+                accumulated_rollout += batch_rollout.sum(dim=0)
+
+    # Compute average
+    average_rollout = accumulated_rollout / num_images
+
+    # Reshape to square for visualization
+    size = int(np.sqrt(len(average_rollout)))
+    attention_map = average_rollout.reshape(size, size).cpu().numpy()
+
+    # Create visualization with multiple subplots
+    fig = plt.figure(figsize=(20, 10))
+
+    # Plot attention heatmap
+    ax1 = plt.subplot(121)
+    im = ax1.imshow(attention_map, cmap='viridis')
+    ax1.set_title('Average Attention Map')
+    plt.colorbar(im, ax=ax1)
+
+    # Plot attention overlay on sample image
+    ax2 = plt.subplot(122)
+    # Use the first image as reference for overlay
+    sample_img = Image.open(image_paths[0]).convert('RGB')
+    sample_img = transform(sample_img)
+    img_np = sample_img.permute(1, 2, 0).cpu().numpy()
+    img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
+
+    # Create attention overlay
+    attention_map_resized = torch.nn.functional.interpolate(
+        torch.tensor(attention_map)[None, None],
+        size=img_np.shape[:2],
+        mode='bilinear',
+        align_corners=False
+    )[0, 0].numpy()
+
+    # Normalize attention map
+    attention_map_resized = (attention_map_resized - attention_map_resized.min()) / (
+        attention_map_resized.max() - attention_map_resized.min())
+
+    # Create a red heatmap overlay
+    heatmap = np.zeros((*img_np.shape[:2], 4))
+    heatmap[..., 0] = 1  # Red channel
+    heatmap[..., 3] = attention_map_resized  # Alpha channel
+
+    ax2.imshow(img_np)
+    ax2.imshow(heatmap)
+    ax2.set_title('Attention Overlay on Sample Image')
+    ax2.axis('off')
+
+    plt.tight_layout()
+    return fig
