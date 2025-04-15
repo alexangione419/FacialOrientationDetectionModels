@@ -29,5 +29,5 @@ The Vision Transformer consists of:
 ds
 ## Data Visualization
 
-1. Open `web_interface/index.html` in your browser.
+1. Open [web_interface/index.html](web_interface/index.html) in your browser.
 2. Enjoy!
