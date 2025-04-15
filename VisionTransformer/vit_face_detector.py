@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 
 class DropPath(nn.Module):
@@ -38,6 +39,8 @@ class PatchEmbedding(nn.Module):
         self.proj = nn.Conv2d(in_channels, embed_dim,
                               kernel_size=patch_size, stride=patch_size)
         self.flatten = nn.Flatten(2)
+
+        self.embed_dim = embed_dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (batch_size, channels, height, width) -> (batch_size, n_patches, embed_dim)
@@ -180,21 +183,46 @@ class VisionTransformer(nn.Module):
 
         self._init_weights()
 
-    def _init_weights(self):
-        """Initialize the weights using a normal distribution."""
-        nn.init.normal_(self.pos_embed, std=0.02)
-        nn.init.normal_(self.cls_token, std=0.02)
-        self.apply(self._init_layer_weights)
-
     def _init_layer_weights(self, m: nn.Module):
         """Initialize the weights of different layer types."""
         if isinstance(m, nn.Linear):
+            # Transformer linear layers: use normal distribution
             nn.init.normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.Conv2d):
+            # Convolutional layers: use Kaiming initialization
+            nn.init.kaiming_normal_(
+                m.weight, mode='fan_out', nonlinearity='relu')
             if m.bias is not None:
                 nn.init.zeros_(m.bias)
         elif isinstance(m, nn.LayerNorm):
             nn.init.zeros_(m.bias)
             nn.init.ones_(m.weight)
+
+    def _init_weights(self):
+        """Initialize the weights using appropriate initialization strategies."""
+        # Initialize classification token
+        nn.init.normal_(self.cls_token, std=0.02)
+
+        # Generate sinusoidal positional embeddings
+        position = torch.arange(self.patch_embed.n_patches + 1).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, self.patch_embed.embed_dim, 2)
+                             * (-math.log(10000.0) / self.patch_embed.embed_dim))
+        pos_embed = torch.zeros(
+            1, self.patch_embed.n_patches + 1, self.patch_embed.embed_dim)
+        pos_embed[0, :, 0::2] = torch.sin(position * div_term)
+        pos_embed[0, :, 1::2] = torch.cos(position * div_term)
+        self.pos_embed.data.copy_(pos_embed)
+
+        # Initialize patch embedding separately
+        nn.init.kaiming_normal_(
+            self.patch_embed.proj.weight, mode='fan_out', nonlinearity='relu')
+        if self.patch_embed.proj.bias is not None:
+            nn.init.zeros_(self.patch_embed.proj.bias)
+
+        # Initialize rest of the layers
+        self.apply(self._init_layer_weights)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the Vision Transformer."""

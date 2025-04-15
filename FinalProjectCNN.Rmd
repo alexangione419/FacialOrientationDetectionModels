@@ -6,81 +6,51 @@ date: "2025-04-07"
 
 ```{r}
 
-max_pool <- function(X, pool_size) {
-  m <- nrow(X)
-  n <- ncol(X)
-  
-  # calculate dimensions of the pooled output
-  pooled_height <- m - pool_size + 1
-  pooled_width <- n - pool_size + 1
-  pooled_output <- matrix(0, nrow = pooled_height, ncol = pooled_width)
-  
-  #pooling step
-  for (i in 1:pooled_height) {
-    for (j in 1:pooled_width) {
-      pool_region <- G[i:(i + pool_size - 1), j:(j + pool_size - 1)]
-      pooled_output[i, j] <- max(pool_region)
-    }
-  }
-  
-  return(pooled_output)
-}
-
-```
-
-
-```{r setup, include=FALSE}
-
-W <- matrix(c(-1, 0, 1,
-              -1, 0, 1,
-              -1, 0, 1), nrow = 3, byrow = TRUE)
-
-# convolution layer function
-convLayer <- function(X, W, stride=1) {
-  # get the dimensions of the kernel and input
-  k_dim <- nrow(W)
-  x_dim <- nrow(X)
-  
-  # calculate the dimensions of the output matrix
-  q <- (x_dim - k_dim) %/% stride + 1
-  G <- matrix(0, nrow = q, ncol = q)
-  
-  # do the thing
-  for (m in 1:q) {
-    for (n in 1:q) {
-      submatrix <- X[((m-1)*stride+1):((m-1)*stride+k_dim), ((n-1)*stride+1):((n-1)*stride+k_dim)]
-      G[m, n] <- sum(W * submatrix)
-    }
-  }
-  
-  return(G)
-}
-
-```
-
-```{r}
-
 #library(torch)
 #library(torchvision)
-#install.packages("keras3") 
+#install.packages("keras") 
 
-library(keras3) 
+library(tensorflow)
+##library(keras3) 
+#library(keras)
+
+
+#install.packages("remotes")
+#remotes::install_github("rstudio/tensorflow")
+#install_tensorflow(version = "2.0.0b1", method = "conda", envname = "r-reticulate")
+
+#remotes::install_github("rstudio/keras", dependencies = TRUE)
+library(keras)
+
+
+#install.packages("keras3")
+#library(reticulate)
+# install_keras(method = "conda", envname = "r-keras")
+#install_tensorflow(method= "conda", envname= "t-flow")
+
+
+#reticulate::install_miniconda()
+#  conda_install(envname = "r-keras", packages = "keras", channel = "conda-forge")
+#conda_install(envname = "r-keras", packages = "tensorflow", channel = "conda-forge")
+##use_condaenv("r-keras", required = TRUE)
+#library(reticulate)
+#py_config()
 ```
 
 
 ```{r}
 # data preparation
 
-# Define the path to your training data folder
-train_dir <- "/home/alexangione/NUCode/ML2/project/classifiedData"  # Update with your actual path
+train_dir <- "./classifiedTrainingData"  
+batch_size = 64
 
-# Create a data generator that rescales the pixel values
+# Create a dataset 
 train_ds <- image_dataset_from_directory(
   directory = train_dir,
   labels = "inferred",
-  label_mode = "binary",       # For two classes (or "categorical" for >2 classes)
-  batch_size = 32,
-  image_size = c(150, 150),     # Resize images to 150x150 pixels
+  label_mode = "binary",       
+  batch_size = batch_size,
+  image_size = c(150, 150),    
   shuffle = TRUE
 )
 
@@ -92,24 +62,61 @@ train_ds <- image_dataset_from_directory(
 ```{r}
 
 # keras CNN
+
 cnn_model <- keras_model_sequential()
 
+
 cnn_model %>%
-  layer_rescaling(scale = 1/255, input_shape = c(150, 150, 3)) %>%
-  layer_conv_2d(filters = 32, kernel_size = c(3,3), activation = 'relu', input_shape = c(150, 150, 1)) %>% 
+  #layer 1
+  layer_conv_2d(filters = 32, kernel_size = c(5,5), activation = 'relu', input_shape = c(150, 150, 3)) %>% 
   layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
+  
+  #layer 2
   layer_conv_2d(filters = 64, kernel_size = c(3,3), activation = 'relu') %>% 
   layer_max_pooling_2d(pool_size = c(2, 2)) %>% 
-  #layer_dropout(rate = 0.25) %>% 
+  #dropout for over fitting avoidance 
+
   layer_flatten() %>% 
+  #layer 3
+  layer_dense(units = 256, activation = 'relu') %>% 
+  #dropout for over fitting avoidance 
+  layer_dropout(rate = 0.5) %>% 
+  
+  #layer 4 ??
   layer_dense(units = 128, activation = 'relu') %>% 
-  #layer_dropout(rate = 0.5) %>% 
+  layer_dropout(rate = 0.5) %>% 
+
+  # output layer
   layer_dense(units = 1, activation = 'sigmoid')
 
+
+
+
 cnn_model %>% compile(
-  loss = "binary_crossentropy",
-  optimizer = optimizer_sgd(),
-  metrics = c("accuracy")
+  optimizer = optimizer_adam(),
+  loss = loss_binary_crossentropy,
+  metrics = 'accuracy'
+)
+
+#cnn_model %>% compile(
+#  loss = loss_categorical_crossentropy,
+#  optimizer = optimizer_adadelta(),
+#  metrics = c('accuracy')
+#)
+
+summary(cnn_model)
+```
+
+
+
+
+``` {r}
+test_ds <- image_dataset_from_directory(
+  directory = "./classifiedTestingData",  
+  labels = "inferred",
+  label_mode = "binary",          
+  image_size = c(150, 150),
+  shuffle = FALSE
 )
 
 
@@ -118,28 +125,59 @@ cnn_model %>% compile(
 
 ``` {r}
 
-steps_per_epoch <- train_generator$samples %/% train_generator$batch_size
-
-# Train your model using fit_generator. You can also provide a validation generator
-# if you have one (e.g., validation_generator), along with validation steps.
-cnn_model %>% fit(
-  x = train_ds,
-  steps_per_epoch = steps_per_epoch,
-  epochs = 15
+cnn_history <- cnn_model %>% fit(
+  train_ds,
+  epochs = as.integer(30),
+  validation_data = test_ds
 )
 
-history <- cnn_model %>% fit(train_ds, epochs=10)
-# Optionally, you can view the training history.
-print(history)
+print(cnn_history)
 
 ```
 
 
 
 
+```{r}
+library(ggplot2)
+
+epochs <- 1:length(cnn_history$metrics$accuracy)
+
+# Plot training accuracy (blue line)
+plot(epochs, cnn_history$metrics$accuracy, type = "l", col = "blue",
+     xlab = "Epoch", ylab = "Accuracy", lwd = 2,
+     main = "Training vs Validation Accuracy")
+
+# Add testing (validation) accuracy (red line)
+lines(epochs, cnn_history$metrics$val_accuracy, type = "l", col = "orange", lwd = 2)
+
+
+```
+
+
+```{r}
+# produce kernel visual
+img_path <- "./data/lfw-deepfunneled/lfw-deepfunneled/Albrecht_Mentz_0002.jpg"  
+
+image <- image_to_array(image_load(img_path, target_size = c(150, 150)))
+
+
+image <- array_reshape(image, c(1, dim(image)))
+
+activation_model <- keras_model(inputs = cnn_model$input,
+                                outputs = cnn_model$layers[[1]]$output)
+
+activation <- predict(activation_model, image)
+activation_fix <- activation[1,,,]
+filter_index <- 1
+activation_map <- activation_fix[,, filter_index]
+
+image(activation_map, 
+      col = gray.colors(256), 
+      axes = FALSE, 
+      main = paste("Activation Map for Filter", filter_index))
 
 
 
-
-
+```
 
